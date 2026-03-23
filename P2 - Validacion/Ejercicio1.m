@@ -1,0 +1,99 @@
+%{
+Ejercicio 1: Estimación del error de generalización
+
+Generar los siguientes datos:
+    rand('seed', 0);
+    randn('seed', 0);
+    x = rand(1,100);
+    y = exp(x.^3 - x.^2 + 0.01*x + 2) + 0.04 * randn(size(x));
+Se desea realizar un modelo de regresión para los datos (𝑥, 𝑦) suponiendo que
+desconocemos el origen de (𝑥, 𝑦), o sea, supondremos que solo disponemos de sus
+valores y no sabemos que proceden de aplicar la función exponencial a un polinomio de
+orden 3.
+Por tanto, no sabemos qué modelo se adapta mejor a los datos (el mejor sería, obviamente,
+la exponencial de un polinomio de orden 3). Para encontrar un modelo aceptable,
+estimaremos el error de generalización de cinco modelos diferentes y nos quedaremos
+con el mejor:
+    1. Un polinomio de orden 1: y = a + bx
+    2. Un polinomio de orden 2: y = a + bx + cx^2
+    3. Un polinomio de orden 3: y = a + bx + cx^2 + dx^3
+    4. El modelo lineal: y = a + bx + cx^2 + dx^3 + esin(x)
+    5. El modelo lineal:  y = a + bx + cx^2 + dx^3 + esin(x) + fcos(x)
+
+Determine la estimación del error de generalización usando CV10 (validación cruzada de
+orden 10) para los 5 modelos dados.
+
+NOTA: Es importante que los errores calculados para los cinco modelos sean
+comparables entre sí
+%}
+
+clc, clear all, close all;
+
+
+%% --- Generación de datos
+rand('seed', 0);
+randn('seed', 0);
+x = rand(1,100);
+y = exp(x.^3 - x.^2 + 0.01*x + 2) + 0.04 * randn(size(x));
+
+
+%% --- Configuración del crossval
+gradoCV = 10;
+numModelos = 5;
+errores = zeros(1,numModelos);
+
+
+%% --- Generación y testeo de los modelos
+for k = 1:gradoCV
+
+    % Separamos los datos de entrenamiento de los de test usando crossval
+    [xtrn,xtst,ytrn,ytst] = crossval(x,y,gradoCV,k);
+
+    for modeloIdx = 1:numModelos
+
+        if modeloIdx <=3 % 3 primeros polinomios simples
+
+            % Obtenemos el modelo usando polifit
+            p = polyfit(xtrn, ytrn, modeloIdx);
+
+            % Obtenemos los valores estimados usando los valores de test.
+            yestim = polyval(p,xtst);
+
+        elseif modeloIdx == 4 % y = a + bx + cx^2 + dx^3 + esin(x) + fcos(x)
+            
+            % Obtenemos el modelo usando GLM
+            A = [(xtrn.^3)', (xtrn.^2)', (xtrn)', sin(xtrn)', ones(length(xtrn),1)];
+            coefs = pinv(A) * ytrn';
+
+            % Obtenemos los valores estimados usando los valores de test.
+            yestim = coefs(1)*xtst.^3 + coefs(2)*xtst.^2 + coefs(3)*xtst + coefs(4)*sin(xtst) + coefs(5);
+
+        elseif modeloIdx == 5 %  y = a + bx + cx^2 + dx^3 + e*sin(x) + f*cos(x)
+            
+            % Obtenemos el modelo usando GLM
+            A = [(xtrn.^3)', (xtrn.^2)', (xtrn)', sin(xtrn)', cos(xtrn)', ones(length(xtrn),1)];
+            coefs = pinv(A) * ytrn';
+
+            % Obtenemos los valores estimados usando los valores de test.
+            yestim = coefs(1)*xtst.^3 + coefs(2)*xtst.^2 + coefs(3)*xtst + coefs(4)*sin(xtst) + coefs(5)*cos(xtst) + coefs(6);
+        end
+
+        errores(modeloIdx) = errores(modeloIdx) + sumsqr(yestim-ytst);
+
+    end
+end
+
+% Calculamos los errores medios
+errores_medios = errores / gradoCV;
+
+
+
+%% --- Mostramos los resultados
+disp('Error de generalización estimado por CV10:');
+for m = 1:numModelos
+    fprintf('Modelo %d: %f\n', m, errores_medios(m));
+end
+
+[error_min, modelo_ganador] = min(errores_medios);
+fprintf('\n=> EL MEJOR MODELO ES EL MODELO %d (Error: %f)\n', modelo_ganador, error_min);
+
